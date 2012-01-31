@@ -165,4 +165,14 @@ class postfix (
   # Relationships
   Postfix::Config <| |> ~> Class['postfix::service']
   Class['postfix'] -> Postfix::Hash <| |>
+
+  mailalias {'root':
+    recipient => $root_mail_recipient,
+    notify    => Exec['newaliases'],
+  }
+
+  # set a path for exec resources
+  Exec {
+    path => [ "/bin", "/usr/bin", "/sbin", "/usr/sbin" ]
+  }
 }
