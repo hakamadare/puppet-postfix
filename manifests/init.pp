@@ -166,6 +166,76 @@ class postfix (
   Postfix::Config <| |> ~> Class['postfix::service']
   Class['postfix'] -> Postfix::Hash <| |>
 
+  file { '/etc/mailname':
+    ensure  => present,
+    content => "$::fqdn\n",
+    seltype => $postfix_seltype,
+  }
+
+  # Aliases
+  file { '/etc/aliases':
+    ensure  => present,
+    content => '# file managed by puppet\n',
+    replace => false,
+    seltype => $postfix_seltype,
+    notify  => Exec['newaliases'],
+  }
+
+  # Aliases
+  exec { 'newaliases':
+    command     => '/usr/bin/newaliases',
+    refreshonly => true,
+    require     => Package['postfix'],
+    subscribe   => File['/etc/aliases'],
+  }
+
+  # Config files
+  file { '/etc/postfix/master.cf':
+    ensure  => present,
+    owner   => 'root',
+    group   => 'root',
+    mode    => '0644',
+    content => template($master_os_template),
+    seltype => $postfix_seltype,
+    notify  => Service['postfix'],
+    require => Package['postfix'],
+  }
+
+  # Config files
+  file { '/etc/postfix/main.cf':
+    ensure  => present,
+    owner   => 'root',
+    group   => 'root',
+    mode    => '0644',
+    source  => 'puppet:///modules/postfix/main.cf',
+    replace => false,
+    seltype => $postfix_seltype,
+    notify  => Service['postfix'],
+    require => Package['postfix'],
+  }
+
+  # Default configuration parameters
+  $myorigin = $valid_fqdn ? {
+    ''      => $::fqdn,
+    default => $valid_fqdn,
+  }
+  postfix::config {
+    'myorigin':         value => $myorigin;
+    'alias_maps':       value => 'hash:/etc/aliases';
+    'inet_interfaces':  value => 'all';
+  }
+
+  case $::operatingsystem {
+    RedHat, CentOS: {
+      postfix::config {
+        'sendmail_path':    value => '/usr/sbin/sendmail.postfix';
+        'newaliases_path':  value => '/usr/bin/newaliases.postfix';
+        'mailq_path':       value => '/usr/bin/mailq.postfix';
+      }
+    }
+    default: {}
+  }
+
   mailalias {'root':
     recipient => $root_mail_recipient,
     notify    => Exec['newaliases'],
